@@ -252,3 +252,46 @@ getAndromedaTempDiskSpace <- function(andromeda = NULL) {
                                error = function(e) NA)
   return(!is.na(installedVersion))
 }
+
+getAndromedaTempDiskSpace2 <- function(andromeda = NULL) {
+  if (!is.null(andromeda) && !inherits(andromeda, "SQLiteConnection")) {
+    abort("Andromeda argument must be of type 'Andromeda'.")
+  }
+  if (is.null(andromeda)) {
+    folder <- .getAndromedaTempFolder()
+  }
+  if (.Platform$OS.type == "windows") {
+    # Use wmic 
+    # https://stackoverflow.com/questions/32200879/how-to-get-disk-space-of-windows-machine-with-r
+    # https://stackoverflow.com/questions/293780/free-space-in-a-cmd-shell
+    disks <- system("wmic logicaldisk get size,freespace,caption", intern = T)
+    disks <- read.table(textConnection(disks), 
+                        skip = 1,
+                        col.names =  c("disk", "freeSpace", "size"),
+                        row.names = NULL)
+        
+    idRow <- stringr::str_detect(tolower(folder), tolower(paste0("^",disks$disk)))
+    if(sum(idRow) != 1) {
+      msg <- paste0("Andromeda temp disk cannot be determined.\n",
+                    "folder: ", folder, "\n",
+                    "disks: ", paste(disks$disk, collapse = ", "), "\n",
+                    "Cannot get available Andromeda disk space.\n")
+      rlang::warn(msg, class = "Andromeda")
+      return(NA)
+    } else {
+      space <- disks[idRow,]$freeSpace
+    }
+  }
+  # Linux or Mac OS
+  if (.Platform$OS.type == "unix") {
+    # https://stat.ethz.ch/pipermail/r-help/2007-October/142319.html
+    if(length(system("which df", intern = TRUE, ignore.stderr = TRUE)) != 1) {
+      msg <- paste0("`which df` command returned error\n",
+                      "Cannot get available Andromeda disk space.\n")
+        rlang::warn(msg, class = "Andromeda")
+        return(NA)
+      return(space)
+    }
+  }
+}
+    
